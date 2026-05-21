@@ -258,6 +258,25 @@ body,
   animation: saved-pulse 1.2s ease;
 }
 
+.update-pill {
+  font-size: 9px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.38);
+  padding: 1px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: inherit;
+  margin-right: 4px;
+}
+
+.update-pill:hover {
+  background: rgba(34, 197, 94, 0.24);
+}
+
 @keyframes saved-pulse {
   0%   { opacity: 0; transform: translateY(-2px); }
   20%  { opacity: 1; transform: translateY(0); }

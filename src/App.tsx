@@ -3,7 +3,24 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
+import packageJson from "../package.json";
 import type { SourceHealth, SourceId, UsageSnapshot, UsageWindow } from "./types";
+
+const APP_VERSION: string = packageJson.version;
+const RELEASES_API = "https://api.github.com/repos/Tsai1030/usage-radar/releases/latest";
+
+function isNewerVersion(latest: string, current: string): boolean {
+  const parse = (v: string) =>
+    v
+      .replace(/^v/, "")
+      .split(".")
+      .map((n) => parseInt(n, 10) || 0);
+  const [la = 0, lb = 0, lc = 0] = parse(latest);
+  const [ca = 0, cb = 0, cc = 0] = parse(current);
+  if (la !== ca) return la > ca;
+  if (lb !== cb) return lb > cb;
+  return lc > cc;
+}
 
 type Snapshots = Record<SourceId, UsageSnapshot | null>;
 type Tier = "pro" | "max-5x" | "max-20x";
@@ -319,6 +336,7 @@ export default function App() {
   const [codexWeeklyPctInput, setCodexWeeklyPctInput] = useState<string>("");
   const [notifyAtThreshold, setNotifyAtThreshold] = useState<boolean>(true);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<{ version: string; url: string } | null>(null);
 
   useEffect(() => {
     invoke<UsageSnapshot[]>("get_initial_snapshots")
@@ -384,6 +402,21 @@ export default function App() {
     const unListenToggle = listen<boolean>("toggle-settings", (e) => {
       setSettingsOpen(e.payload);
     });
+
+    // Once-per-launch check against GitHub Releases. Silent on network errors.
+    fetch(RELEASES_API, { headers: { Accept: "application/vnd.github+json" } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const tag: string | undefined = data?.tag_name;
+        const url: string | undefined = data?.html_url;
+        if (!tag || !url) return;
+        const latest = tag.replace(/^v/, "");
+        if (isNewerVersion(latest, APP_VERSION)) {
+          setAvailableUpdate({ version: latest, url });
+        }
+      })
+      .catch(() => undefined);
+
     return () => {
       unListenUpdate.then((fn) => fn()).catch(() => undefined);
       unListenToggle.then((fn) => fn()).catch(() => undefined);
@@ -570,6 +603,17 @@ export default function App() {
           </button>
         ))}
         <div className="spacer" />
+        {availableUpdate && (
+          <button
+            className="update-pill"
+            title={`Update available: v${availableUpdate.version}`}
+            onClick={() => {
+              invoke("open_url", { url: availableUpdate.url }).catch(console.error);
+            }}
+          >
+            ↑ v{availableUpdate.version}
+          </button>
+        )}
         {savedFlash && <span className="saved-flash">saved</span>}
         {settingsOpen ? (
           <button
