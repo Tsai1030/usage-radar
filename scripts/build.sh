@@ -20,7 +20,12 @@ if [ ! -d node_modules ]; then
 fi
 
 echo "==> Building release (this can take several minutes)..."
-bun run tauri build --bundles all
+case "$(uname -s)" in
+    Darwin*) BUNDLES="dmg app" ;;
+    Linux*)  BUNDLES="deb appimage rpm" ;;
+    *)       BUNDLES="msi nsis" ;;
+esac
+bun run tauri build --bundles $BUNDLES
 
 echo ""
 echo "==> Output files:"

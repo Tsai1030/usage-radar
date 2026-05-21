@@ -16,6 +16,5 @@ if %EXIT_CODE% NEQ 0 (
 ) else (
     echo Launcher finished.
 )
-echo Press any key to close this window...
-pause >nul
+pause
 endlocal

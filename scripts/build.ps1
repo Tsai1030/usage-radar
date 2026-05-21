@@ -26,7 +26,8 @@ if (-not (Test-Path "node_modules")) {
 }
 
 Write-Host "==> Building release (this can take several minutes)..." -ForegroundColor Cyan
-bun run tauri build --bundles all
+# Tauri 2 requires explicit bundle names; on Windows it's msi + nsis.
+bun run tauri build --bundles msi nsis
 $exit = $LASTEXITCODE
 
 if ($exit -ne 0) {
