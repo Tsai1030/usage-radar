@@ -1,44 +1,44 @@
-{
-  "$schema": "https://schema.tauri.app/config/2.0.0",
-  "productName": "Usage Radar",
-  "version": "0.0.1",
-  "identifier": "dev.usage-radar.app",
-  "build": {
-    "beforeDevCommand": "bun run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "Usage Radar",
-        "width": 260,
-        "height": 100,
-        "minWidth": 260,
-        "minHeight": 100,
-        "maxWidth": 260,
-        "maxHeight": 380,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "shadow": false,
-        "visible": false
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": false,
-    "targets": "all",
-    "icon": [
-      "icons/icon.ico",
-      "icons/icon.png"
-    ]
-  }
+﻿{
+    "$schema":  "https://schema.tauri.app/config/2.0.0",
+    "productName":  "Usage Radar",
+    "version":  "0.0.1",
+    "identifier":  "dev.usage-radar.app",
+    "build":  {
+                  "beforeDevCommand":  "bun run dev",
+                  "devUrl":  "http://localhost:1420",
+                  "beforeBuildCommand":  "bun run build",
+                  "frontendDist":  "../dist"
+              },
+    "app":  {
+                "windows":  [
+                                {
+                                    "label":  "main",
+                                    "title":  "Usage Radar",
+                                    "width":  260,
+                                    "height":  100,
+                                    "minWidth":  260,
+                                    "minHeight":  100,
+                                    "maxWidth":  260,
+                                    "maxHeight":  380,
+                                    "resizable":  false,
+                                    "decorations":  false,
+                                    "transparent":  true,
+                                    "alwaysOnTop":  true,
+                                    "skipTaskbar":  true,
+                                    "shadow":  false,
+                                    "visible":  false
+                                }
+                            ],
+                "security":  {
+                                 "csp":  null
+                             }
+            },
+    "bundle":  {
+                   "active":  false,
+                   "targets":  "all",
+                   "icon":  [
+                                "icons/icon.ico",
+                                "icons/icon.png"
+                            ]
+               }
 }

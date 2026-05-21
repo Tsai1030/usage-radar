@@ -17,11 +17,6 @@ interface AppSettings {
   codex_weekly_pct_override?: number | null;
 }
 
-const TIER_DEFAULTS: Record<Tier, { session: number; weekly: number }> = {
-  "pro":     { session: 45,  weekly: 300 },
-  "max-5x":  { session: 225, weekly: 1500 },
-  "max-20x": { session: 900, weekly: 6000 },
-};
 
 const TABS: { id: SourceId; label: string }[] = [
   { id: "codex", label: "Codex" },
@@ -291,19 +286,21 @@ export default function App() {
         setSnapshots({
           codex: {
             source: "codex",
-            session: { used_percent: 12, resets_at: plus(3.6), window_minutes: 300, is_estimated: false },
-            weekly: { used_percent: 36, resets_at: plus(96), window_minutes: 10080, is_estimated: false },
+            session: { used_percent: 12, current_count: null, resets_at: plus(3.6), window_minutes: 300, is_estimated: false },
+            weekly:  { used_percent: 36, current_count: null, resets_at: plus(96),  window_minutes: 10080, is_estimated: false },
             plan_type: "plus",
             source_health: "ok",
             fetched_at: now.toISOString(),
+            data_updated_at: now.toISOString(),
           },
           claude: {
             source: "claude",
-            session: { used_percent: 16, resets_at: plus(2.25), window_minutes: 300, is_estimated: true },
-            weekly: { used_percent: 15, resets_at: plus(72), window_minutes: 10080, is_estimated: true },
+            session: { used_percent: 16, current_count: 36,   resets_at: plus(2.25), window_minutes: 300, is_estimated: true },
+            weekly:  { used_percent: 15, current_count: 226,  resets_at: plus(72),   window_minutes: 10080, is_estimated: true },
             plan_type: "max-5x",
             source_health: "ok",
             fetched_at: now.toISOString(),
+            data_updated_at: now.toISOString(),
           },
         });
       });
