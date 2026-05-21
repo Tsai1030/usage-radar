@@ -1,6 +1,9 @@
+use std::path::PathBuf;
+use std::sync::mpsc;
 use std::time::Duration;
 
 use chrono::Utc;
+use notify::{EventKind, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_notification::NotificationExt;
 
@@ -9,7 +12,15 @@ use crate::sources::{
     claude::ClaudeSource, codex::CodexSource, SourceId, UsageSnapshot, UsageSource, UsageWindow,
 };
 
+/// Hard fallback so we still poll even if every file watcher silently fails
+/// (e.g. permissions, watch-limit on Linux). Most updates land via the watcher
+/// within 1-2 s of the underlying log write.
 const POLL_INTERVAL_SECS: u64 = 30;
+
+/// After a watcher event arrives, wait this long collecting more events so a
+/// burst of fs writes (which is what JSONL appending looks like) results in
+/// one snapshot recompute, not dozens.
+const WATCHER_DEBOUNCE_MS: u64 = 800;
 
 pub fn spawn(app: AppHandle) {
     std::thread::spawn(move || {
@@ -17,14 +28,80 @@ pub fn spawn(app: AppHandle) {
         let mut claude = ClaudeSource::default();
         let mut thresholds = ThresholdTracker::default();
 
-        // Initial tick so the UI doesn't wait one interval to populate.
+        // Wire up filesystem watchers. They send () to `rx` whenever a Claude
+        // or Codex log file changes; if they fail to set up we silently fall
+        // back to interval polling only.
+        let (tx, rx) = mpsc::channel::<()>();
+        let _watchers = setup_watchers(tx);
+
+        // Initial tick so the UI doesn't wait for the first interval/event.
         emit_all(&app, &mut codex, &mut claude, &mut thresholds);
 
         loop {
-            std::thread::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
+            // Block until either a watcher event arrives OR the fallback
+            // interval elapses.
+            match rx.recv_timeout(Duration::from_secs(POLL_INTERVAL_SECS)) {
+                Ok(_) => {
+                    // Drain remaining events fired during a burst of appends.
+                    std::thread::sleep(Duration::from_millis(WATCHER_DEBOUNCE_MS));
+                    while rx.try_recv().is_ok() {}
+                }
+                Err(_) => {
+                    // Timeout — just do a regular poll.
+                }
+            }
             emit_all(&app, &mut codex, &mut claude, &mut thresholds);
         }
     });
+}
+
+fn home_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("USERPROFILE").map(PathBuf::from)
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME").map(PathBuf::from)
+    }
+}
+
+fn watch_paths() -> Vec<PathBuf> {
+    let mut v = Vec::new();
+    if let Some(h) = home_dir() {
+        v.push(h.join(".claude").join("projects"));
+        v.push(h.join(".codex").join("sessions"));
+    }
+    v
+}
+
+/// Register a recursive watcher per known log directory. Returns the watcher
+/// objects so the caller can keep them alive (dropping a watcher stops it).
+fn setup_watchers(tx: mpsc::Sender<()>) -> Vec<notify::RecommendedWatcher> {
+    let mut out = Vec::new();
+    for path in watch_paths() {
+        if !path.exists() {
+            continue;
+        }
+        let tx_inner = tx.clone();
+        let watcher_result = notify::recommended_watcher(
+            move |res: notify::Result<notify::Event>| {
+                if let Ok(event) = res {
+                    if matches!(
+                        event.kind,
+                        EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+                    ) {
+                        let _ = tx_inner.send(());
+                    }
+                }
+            },
+        );
+        let Ok(mut w) = watcher_result else { continue };
+        if w.watch(&path, RecursiveMode::Recursive).is_ok() {
+            out.push(w);
+        }
+    }
+    out
 }
 
 fn emit_all(
