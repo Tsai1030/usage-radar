@@ -469,6 +469,32 @@ export default function App() {
   const brandVar = isClaude ? "--claude-brand" : "--codex-brand";
   const staleAge = formatAge(active?.data_updated_at);
 
+  const statusBanner = useMemo<{ text: string; tone: "warn" | "info" } | null>(() => {
+    const sh = active?.source_health;
+    if (sh === "schema_mismatch") {
+      return { text: "log schema may have changed — update app", tone: "warn" };
+    }
+    if (sh === "permission_denied") {
+      return { text: "no permission to read log", tone: "warn" };
+    }
+    if (sh === "path_not_found") {
+      return {
+        text: tab === "codex" ? "no ~/.codex/sessions" : "no ~/.claude/projects",
+        tone: "warn",
+      };
+    }
+    if (sh === "file_locked") {
+      return { text: "log file in use, retrying…", tone: "info" };
+    }
+    if (sh === "no_data") {
+      return { text: "no data yet", tone: "info" };
+    }
+    if (staleAge) {
+      return { text: `stale · ${staleAge} ago`, tone: "info" };
+    }
+    return null;
+  }, [active, staleAge, tab]);
+
   const healthClass = useMemo(
     () => TABS.map((t) => healthDotClass(snapshots[t.id]?.source_health)),
     [snapshots],
@@ -544,7 +570,11 @@ export default function App() {
         )
       ) : (
         <div className="body">
-          {staleAge && <div className="stale-banner">stale · {staleAge} ago</div>}
+          {statusBanner && (
+            <div className={`status-banner status-${statusBanner.tone}`}>
+              {statusBanner.text}
+            </div>
+          )}
           <Row label="Session" w={active?.session ?? null} estimated={isClaude} brandVar={brandVar} />
           <Row label="Weekly" w={active?.weekly ?? null} estimated={isClaude} brandVar={brandVar} />
         </div>

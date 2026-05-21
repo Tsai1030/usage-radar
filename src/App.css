@@ -153,13 +153,22 @@ body,
   justify-content: center;
 }
 
-.stale-banner {
+.status-banner {
   font-size: 9px;
-  opacity: 0.5;
   text-align: right;
   letter-spacing: 0.3px;
   line-height: 1;
   margin-top: -2px;
+}
+
+.status-banner.status-info {
+  opacity: 0.5;
+}
+
+.status-banner.status-warn {
+  color: var(--bar-yellow);
+  opacity: 0.85;
+  font-weight: 500;
 }
 
 .row {

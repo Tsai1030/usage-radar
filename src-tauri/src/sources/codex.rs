@@ -37,7 +37,20 @@ impl UsageSource for CodexSource {
 
         let rate_limits = match read_latest_rate_limits(&newest_path) {
             Ok(Some(v)) => v,
-            Ok(None) => return empty(now, SourceHealth::NoData, data_updated_at),
+            Ok(None) => {
+                // File exists but no rate_limits matched. If the file is
+                // non-trivial in size, the schema likely changed; otherwise
+                // it's just a fresh session before the first response.
+                let size = std::fs::metadata(&newest_path)
+                    .map(|m| m.len())
+                    .unwrap_or(0);
+                let health = if size > 10_000 {
+                    SourceHealth::SchemaMismatch
+                } else {
+                    SourceHealth::NoData
+                };
+                return empty(now, health, data_updated_at);
+            }
             Err(err) => {
                 let health = match err.kind() {
                     std::io::ErrorKind::PermissionDenied => SourceHealth::PermissionDenied,

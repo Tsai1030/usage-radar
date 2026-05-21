@@ -33,7 +33,11 @@ impl UsageSource for ClaudeSource {
         let tier = app_settings.claude_tier;
         let (session_cap, weekly_cap) = app_settings.effective_caps();
 
-        let weekly_start = now - Duration::days(WEEKLY_LENGTH_DAYS);
+        // Anthropic's weekly is calendar-aligned (Monday 00:00 UTC), not a
+        // 7d rolling window — match that so calibration stays stable instead
+        // of drifting as old prompts roll out of the window.
+        let weekly_start = current_week_start_utc(now);
+        let weekly_end = weekly_start + Duration::days(WEEKLY_LENGTH_DAYS);
 
         // Collect ALL prompt timestamps so we can group them into 5h sessions
         // the way Anthropic does (session starts at first prompt, ends 5h later,
@@ -44,6 +48,7 @@ impl UsageSource for ClaudeSource {
         let mut weekly_count: u32 = 0;
         let mut files_scanned: usize = 0;
         let mut read_errors: usize = 0;
+        let mut user_lines_seen: usize = 0;
 
         for jsonl in find_jsonls(&projects_dir) {
             files_scanned += 1;
@@ -58,6 +63,7 @@ impl UsageSource for ClaudeSource {
                 if !line.contains("\"type\":\"user\"") {
                     continue;
                 }
+                user_lines_seen += 1;
                 let val: Value = match serde_json::from_str(line) {
                     Ok(v) => v,
                     Err(_) => continue,
@@ -81,6 +87,13 @@ impl UsageSource for ClaudeSource {
 
         if files_scanned == 0 {
             return empty(now, SourceHealth::NoData);
+        }
+
+        // Schema drift: we found plenty of "type":"user" lines but couldn't
+        // extract any prompts (filter rejected all). Upstream schema likely
+        // changed — flag so the UI can warn the user.
+        if user_lines_seen >= 50 && all_prompts.is_empty() {
+            return empty(now, SourceHealth::SchemaMismatch);
         }
 
         all_prompts.sort();
@@ -120,7 +133,7 @@ impl UsageSource for ClaudeSource {
         let weekly = UsageWindow {
             used_percent: pct(weekly_count, weekly_cap),
             current_count: Some(weekly_count),
-            resets_at: next_monday_utc(now),
+            resets_at: weekly_end,
             window_minutes: WEEKLY_WINDOW_MINUTES,
             is_estimated: true,
         };
@@ -233,14 +246,10 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn next_monday_utc(now: DateTime<Utc>) -> DateTime<Utc> {
+/// Monday 00:00 UTC of the week containing `now`.
+fn current_week_start_utc(now: DateTime<Utc>) -> DateTime<Utc> {
     let weekday_from_monday = now.weekday().num_days_from_monday() as i64;
-    let days_until_next_monday = if weekday_from_monday == 0 {
-        7
-    } else {
-        7 - weekday_from_monday
-    };
-    let target_date = now.date_naive() + Duration::days(days_until_next_monday);
+    let target_date = now.date_naive() - Duration::days(weekday_from_monday);
     target_date
         .and_time(NaiveTime::from_hms_opt(0, 0, 0).unwrap())
         .and_utc()
