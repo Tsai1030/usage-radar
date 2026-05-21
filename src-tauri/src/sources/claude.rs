@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Datelike, Duration, NaiveTime, Utc};
@@ -10,9 +12,17 @@ const SESSION_WINDOW_MINUTES: u32 = 300;
 const WEEKLY_WINDOW_MINUTES: u32 = 10080;
 const SESSION_LENGTH_HOURS: i64 = 5;
 const WEEKLY_LENGTH_DAYS: i64 = 7;
+const CACHE_PRUNE_DAYS: i64 = 8;
 
 #[derive(Default)]
-pub struct ClaudeSource;
+pub struct ClaudeSource {
+    /// Per-file byte offset we've already parsed up to. New polls only read
+    /// from this offset onward, so a 50 MB log stays cheap to poll.
+    file_offsets: HashMap<PathBuf, u64>,
+    /// Cached prompt timestamps gathered across polls, kept sorted ascending
+    /// and pruned to the last `CACHE_PRUNE_DAYS` so memory stays bounded.
+    prompt_cache: Vec<DateTime<Utc>>,
+}
 
 impl UsageSource for ClaudeSource {
     fn id(&self) -> SourceId {
@@ -39,74 +49,92 @@ impl UsageSource for ClaudeSource {
         let weekly_start = current_week_start_utc(now);
         let weekly_end = weekly_start + Duration::days(WEEKLY_LENGTH_DAYS);
 
-        // Collect ALL prompt timestamps so we can group them into 5h sessions
-        // the way Anthropic does (session starts at first prompt, ends 5h later,
-        // next prompt after that starts a new session). Rolling-5h was producing
-        // misleadingly low counts after a gap because it dropped older prompts
-        // that were still within Anthropic's current session window.
-        let mut all_prompts: Vec<DateTime<Utc>> = Vec::new();
-        let mut weekly_count: u32 = 0;
+        let was_cold = self.prompt_cache.is_empty();
+        let cache_cutoff = now - Duration::days(CACHE_PRUNE_DAYS);
+
+        let files = find_jsonls(&projects_dir);
+        if files.is_empty() && self.prompt_cache.is_empty() {
+            return empty(now, SourceHealth::NoData);
+        }
+
+        // Detect rotation: if any tracked file shrank below its known offset,
+        // we can't reliably trust our offset map. Easiest safe behaviour: clear
+        // both the cache and offsets, re-read everything from scratch.
+        let mut rotation = false;
+        for path in &files {
+            if let Some(off) = self.file_offsets.get(path) {
+                let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+                if size < *off {
+                    rotation = true;
+                    break;
+                }
+            }
+        }
+        if rotation {
+            self.file_offsets.clear();
+            self.prompt_cache.clear();
+        }
+
+        // Forget offsets for files that have disappeared since last poll
+        let current_set: HashSet<&PathBuf> = files.iter().collect();
+        self.file_offsets.retain(|p, _| current_set.contains(p));
+
+        let mut user_lines_seen_this_poll: usize = 0;
         let mut files_scanned: usize = 0;
         let mut read_errors: usize = 0;
-        let mut user_lines_seen: usize = 0;
 
-        for jsonl in find_jsonls(&projects_dir) {
+        for path in &files {
             files_scanned += 1;
-            let content = match std::fs::read_to_string(&jsonl) {
-                Ok(c) => c,
+            let size = match std::fs::metadata(path) {
+                Ok(m) => m.len(),
                 Err(_) => {
                     read_errors += 1;
                     continue;
                 }
             };
-            for line in content.lines() {
-                if !line.contains("\"type\":\"user\"") {
-                    continue;
+            let prev = *self.file_offsets.get(path).unwrap_or(&0);
+            if size == prev {
+                continue; // nothing new since last poll
+            }
+            let new_offset = read_new_prompts_from(
+                path,
+                prev,
+                &mut self.prompt_cache,
+                &mut user_lines_seen_this_poll,
+            );
+            match new_offset {
+                Ok(advanced_to) => {
+                    self.file_offsets.insert(path.clone(), advanced_to);
                 }
-                user_lines_seen += 1;
-                let val: Value = match serde_json::from_str(line) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                if !is_real_user_prompt(&val) {
-                    continue;
+                Err(_) => {
+                    read_errors += 1;
                 }
-                let Some(ts_str) = val.get("timestamp").and_then(|v| v.as_str()) else {
-                    continue;
-                };
-                let ts = match DateTime::parse_from_rfc3339(ts_str) {
-                    Ok(t) => t.with_timezone(&Utc),
-                    Err(_) => continue,
-                };
-                if ts >= weekly_start {
-                    weekly_count += 1;
-                }
-                all_prompts.push(ts);
             }
         }
 
-        if files_scanned == 0 {
-            return empty(now, SourceHealth::NoData);
-        }
-
-        // Schema drift: we found plenty of "type":"user" lines but couldn't
-        // extract any prompts (filter rejected all). Upstream schema likely
-        // changed — flag so the UI can warn the user.
-        if user_lines_seen >= 50 && all_prompts.is_empty() {
+        // Schema drift check is only meaningful when we have a cold start: we
+        // saw a lot of candidate lines but extracted zero prompts.
+        if was_cold && user_lines_seen_this_poll >= 50 && self.prompt_cache.is_empty() {
             return empty(now, SourceHealth::SchemaMismatch);
         }
 
-        all_prompts.sort();
+        if files_scanned == 0 && self.prompt_cache.is_empty() {
+            return empty(now, SourceHealth::NoData);
+        }
 
-        // Walk prompts and group into 5h sessions: a new session starts each
-        // time a prompt is >= 5h after the current session's first prompt.
+        // Prune + normalise the cache
+        self.prompt_cache.retain(|t| *t >= cache_cutoff);
+        self.prompt_cache.sort();
+        self.prompt_cache.dedup();
+
+        // Sessionise: walk forward, a new session starts when a prompt is
+        // >= 5h after the current session's first prompt.
         let session_duration = Duration::hours(SESSION_LENGTH_HOURS);
         let mut session_start: Option<DateTime<Utc>> = None;
         let mut session_count: u32 = 0;
-        for ts in &all_prompts {
-            let belongs_to_current =
-                session_start.is_some_and(|s| *ts < s + session_duration);
-            if belongs_to_current {
+        for ts in &self.prompt_cache {
+            let belongs = session_start.is_some_and(|s| *ts < s + session_duration);
+            if belongs {
                 session_count += 1;
             } else {
                 session_start = Some(*ts);
@@ -114,13 +142,19 @@ impl UsageSource for ClaudeSource {
             }
         }
 
-        // Is the latest session still active?
         let (session_count, session_resets_at) = match session_start {
             Some(start) if now < start + session_duration => {
                 (session_count, start + session_duration)
             }
             _ => (0, now + session_duration),
         };
+
+        // Weekly is a simple count over the calendar week
+        let weekly_count = self
+            .prompt_cache
+            .iter()
+            .filter(|t| **t >= weekly_start)
+            .count() as u32;
 
         let session = UsageWindow {
             used_percent: pct(session_count, session_cap),
@@ -151,9 +185,57 @@ impl UsageSource for ClaudeSource {
             plan_type: Some(tier.label().to_string()),
             source_health,
             fetched_at: now,
-            data_updated_at: Some(now), // Claude is always live (recomputed each poll)
+            data_updated_at: Some(now),
         }
     }
+}
+
+/// Open `path`, seek to `from_offset`, parse complete new lines for user
+/// prompts, and push timestamps into `cache`. Returns the new offset that
+/// has been fully processed (always ends at a newline so partially-written
+/// trailing lines are re-read on the next poll).
+fn read_new_prompts_from(
+    path: &Path,
+    from_offset: u64,
+    cache: &mut Vec<DateTime<Utc>>,
+    user_lines_seen: &mut usize,
+) -> std::io::Result<u64> {
+    let mut file = std::fs::File::open(path)?;
+    file.seek(SeekFrom::Start(from_offset))?;
+    let mut buf = String::new();
+    file.read_to_string(&mut buf)?;
+
+    // Only commit up to the last newline — anything after may be a partial
+    // line still being appended.
+    let usable_len = match buf.rfind('\n') {
+        Some(pos) => pos + 1,
+        None => 0,
+    };
+    let usable = &buf[..usable_len];
+
+    for line in usable.lines() {
+        if !line.contains("\"type\":\"user\"") {
+            continue;
+        }
+        *user_lines_seen += 1;
+        let val: Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if !is_real_user_prompt(&val) {
+            continue;
+        }
+        let Some(ts_str) = val.get("timestamp").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let ts = match DateTime::parse_from_rfc3339(ts_str) {
+            Ok(t) => t.with_timezone(&Utc),
+            Err(_) => continue,
+        };
+        cache.push(ts);
+    }
+
+    Ok(from_offset + usable_len as u64)
 }
 
 fn empty(now: DateTime<Utc>, health: SourceHealth) -> UsageSnapshot {
