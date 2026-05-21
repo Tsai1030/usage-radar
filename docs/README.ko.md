@@ -42,12 +42,11 @@ Anthropic과 OpenAI 모두 구독 사용량을 브라우저 탭 안에 숨겨두
 
 ### 일반 사용자
 
-사전 빌드된 설치 파일은 [Releases 페이지](https://github.com/Tsai1030/usage-radar/releases)에 곧 올라옵니다. v0.1 릴리스 전에는 아래 개발자 가이드를 따라주세요.
+[최신 릴리스](https://github.com/Tsai1030/usage-radar/releases/latest)에서 사전 빌드된 설치 파일을 다운로드하세요.
 
-릴리스 후:
-1. `.msi`(Windows)/ `.dmg`(macOS)/ `.AppImage`(Linux) 다운로드.
-2. 더블 클릭해 설치.
-3. 시작 메뉴 / 응용 프로그램에서 실행.
+1. `.msi` 또는 NSIS `.exe`(Windows) 받기. macOS / Linux 설치 파일은 추후 릴리스에서 제공 예정. 그때까지는 아래 개발자 가이드 참고.
+2. 더블 클릭해 설치. Windows SmartScreen이 *알 수 없는 게시자* 경고를 표시(코드 서명은 v0.3에서 예정) → **추가 정보 → 실행** 클릭.
+3. 시작 메뉴에서 **Usage Radar** 실행.
 4. 카드가 우상단에 나타나고, 트레이 아이콘이 시계 옆에 표시됩니다.
 
 ### 개발자

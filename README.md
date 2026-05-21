@@ -43,14 +43,12 @@ Anthropic and OpenAI both hide subscription usage behind a browser tab. Power us
 
 ### Non-developers — the easy way
 
-Pre-built installers will appear on the [Releases page](https://github.com/Tsai1030/usage-radar/releases). Until v0.1 ships, please use the developer install below.
+Download a pre-built installer from the [latest release](https://github.com/Tsai1030/usage-radar/releases/latest).
 
-When releases are available:
-
-1. Download the `.msi` (Windows) / `.dmg` (macOS) / `.AppImage` (Linux).
-2. Double-click to install.
-3. Launch from Start Menu / Applications.
-4. The card appears top-right; the icon sits next to your clock.
+1. Grab the `.msi` or NSIS `.exe` (Windows). macOS and Linux installers coming in a later release — for now use the developer instructions below.
+2. Double-click to install. Windows SmartScreen will warn about an *unknown publisher* (no code signing yet — planned for v0.3) — click **More info → Run anyway**.
+3. Launch **Usage Radar** from the Start Menu.
+4. The card appears top-right; the tray icon sits next to your clock.
 
 ### Developers — clone & run
 

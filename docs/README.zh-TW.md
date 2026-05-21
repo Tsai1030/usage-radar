@@ -42,12 +42,11 @@ Anthropic 和 OpenAI 都把訂閱用量藏在瀏覽器的某個分頁裡。**Cla
 
 ### 一般使用者
 
-之後會在 [Releases 頁面](https://github.com/Tsai1030/usage-radar/releases) 提供預先打包的安裝檔。v0.1 release 之前請走下面開發者流程。
+到 [最新 release](https://github.com/Tsai1030/usage-radar/releases/latest) 下載預先打包的安裝檔。
 
-未來有 release 之後：
-1. 下載 `.msi`（Windows）/ `.dmg`（macOS）/ `.AppImage`（Linux）。
-2. 雙擊安裝。
-3. 從開始選單 / 應用程式啟動。
+1. 抓 `.msi` 或 NSIS `.exe`（Windows）。macOS / Linux 安裝檔還沒做，先走下面開發者流程。
+2. 雙擊安裝。Windows SmartScreen 會跳「**不明發行者**」警告（還沒做 code signing，v0.3 才會做）→ 點「**更多資訊 → 仍要執行**」。
+3. 從**開始選單**找「Usage Radar」啟動。
 4. 卡片自動跳出在螢幕右上、tray icon 出現在時鐘旁。
 
 ### 開發者
