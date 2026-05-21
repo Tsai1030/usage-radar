@@ -2,6 +2,9 @@ mod scheduler;
 mod settings;
 mod sources;
 
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -10,6 +13,11 @@ use tauri::{
 
 use settings::AppSettings;
 use sources::{claude::ClaudeSource, codex::CodexSource, UsageSnapshot, UsageSource};
+
+/// Throttles position writes to settings.json while a drag is in flight.
+/// Tauri emits Moved on every pixel; we don't need to persist that often.
+static LAST_POS_SAVE_MS: AtomicI64 = AtomicI64::new(0);
+const POSITION_SAVE_THROTTLE_MS: i64 = 200;
 
 #[tauri::command]
 fn get_initial_snapshots() -> Vec<UsageSnapshot> {
@@ -36,6 +44,30 @@ fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
         let _ = win.show();
         let _ = win.set_focus();
         let _ = win.emit("toggle-settings", true);
+    }
+    Ok(())
+}
+
+/// Open a URL in the user's default browser without spawning a console window.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    open_in_browser(&url).map_err(|e| e.to_string())
+}
+
+fn open_in_browser(url: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", url])
+            .spawn()?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open").arg(url).spawn()?;
+    }
+    #[cfg(all(target_os = "linux", not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open").arg(url).spawn()?;
     }
     Ok(())
 }
@@ -67,6 +99,13 @@ fn toggle_main_window(app: &tauri::AppHandle) {
     }
 }
 
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -75,8 +114,43 @@ pub fn run() {
             let win = app
                 .get_webview_window("main")
                 .expect("main window is defined in tauri.conf.json");
-            let _ = position_top_right(&win);
+
+            // Restore previous position if we have one; otherwise put it at
+            // top-right.
+            let saved = settings::load();
+            match (saved.window_x, saved.window_y) {
+                (Some(x), Some(y)) => {
+                    let _ = win.set_position(PhysicalPosition::new(x, y));
+                }
+                _ => {
+                    let _ = position_top_right(&win);
+                }
+            }
             let _ = win.show();
+
+            // Persist the new position whenever the user drags the card.
+            // Throttle to once per 200ms so we don't thrash the disk during
+            // a fast drag.
+            let win_for_event = win.clone();
+            win.on_window_event(move |event| {
+                if let tauri::WindowEvent::Moved(pos) = event {
+                    let now = now_ms();
+                    let last = LAST_POS_SAVE_MS.load(Ordering::Relaxed);
+                    if now - last < POSITION_SAVE_THROTTLE_MS {
+                        return;
+                    }
+                    LAST_POS_SAVE_MS.store(now, Ordering::Relaxed);
+
+                    let mut s = settings::load();
+                    s.window_x = Some(pos.x);
+                    s.window_y = Some(pos.y);
+                    let _ = settings::save(&s);
+                    // Touch win_for_event so the closure captures it (we may
+                    // need the handle in future use cases — keep the binding
+                    // alive even if currently unused).
+                    let _ = &win_for_event;
+                }
+            });
 
             let show_item = MenuItemBuilder::with_id("show", "Show").build(app)?;
             let hide_item = MenuItemBuilder::with_id("hide", "Hide").build(app)?;
@@ -130,6 +204,7 @@ pub fn run() {
             get_settings,
             update_settings,
             open_settings,
+            open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

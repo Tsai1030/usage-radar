@@ -32,8 +32,11 @@ const TIERS: { id: Tier; label: string; session: string; weekly: string }[] = [
 
 const CARD_WIDTH = 260;
 const CARD_HEIGHT_NORMAL = 100;
-const CARD_HEIGHT_SETTINGS_CLAUDE = 320;
-const CARD_HEIGHT_SETTINGS_CODEX = 200;
+const CARD_HEIGHT_SETTINGS_CLAUDE = 354;
+const CARD_HEIGHT_SETTINGS_CODEX = 234;
+
+const ANTHROPIC_DASHBOARD_URL = "https://claude.ai/settings/usage";
+const OPENAI_DASHBOARD_URL = "https://chatgpt.com/#settings/AccountInformation/Usage";
 
 function barColor(pct: number, brandVar: string): string {
   if (pct >= 85) return "var(--bar-red)";
@@ -229,6 +232,15 @@ function ClaudeSettingsBody({
       </div>
 
       <NotifyToggle value={notifyAtThreshold} onChange={onToggleNotify} />
+      <button
+        className="dash-button"
+        data-source="claude"
+        onClick={() => {
+          invoke("open_url", { url: ANTHROPIC_DASHBOARD_URL }).catch(console.error);
+        }}
+      >
+        Open Anthropic dashboard ↗
+      </button>
     </div>
   );
 }
@@ -281,6 +293,15 @@ function CodexSettingsBody({
       </div>
 
       <NotifyToggle value={notifyAtThreshold} onChange={onToggleNotify} />
+      <button
+        className="dash-button"
+        data-source="codex"
+        onClick={() => {
+          invoke("open_url", { url: OPENAI_DASHBOARD_URL }).catch(console.error);
+        }}
+      >
+        Open OpenAI dashboard ↗
+      </button>
     </div>
   );
 }

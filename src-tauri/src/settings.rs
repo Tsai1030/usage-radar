@@ -60,6 +60,12 @@ pub struct AppSettings {
     /// NOTIFY_THRESHOLD_PCT from below. Default on.
     #[serde(default = "default_notify_at_threshold")]
     pub notify_at_threshold: bool,
+    /// Last known window position in physical pixels. None = use top-right
+    /// auto-placement (first launch / never moved).
+    #[serde(default)]
+    pub window_x: Option<i32>,
+    #[serde(default)]
+    pub window_y: Option<i32>,
 }
 
 fn default_notify_at_threshold() -> bool {
@@ -79,6 +85,8 @@ impl Default for AppSettings {
             codex_session_pct_override: None,
             codex_weekly_pct_override: None,
             notify_at_threshold: true,
+            window_x: None,
+            window_y: None,
         }
     }
 }
