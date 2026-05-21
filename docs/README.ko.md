@@ -58,20 +58,22 @@ Anthropic과 OpenAI 모두 구독 사용량을 브라우저 탭 안에 숨겨두
 - **bun** 패키지 매니저
 
 <details>
-<summary><b>Windows (PowerShell)</b></summary>
+<summary><b>Windows</b></summary>
 
 ```powershell
-# 1. 도구 설치 (1회)
+# 1. 도구 설치 (1회, 전역)
 winget install --id Rustlang.Rustup
 winget install --id Oven-sh.Bun
 
-# 2. Clone 후 실행
+# 2. Clone
 git clone https://github.com/Tsai1030/usage-radar.git
 cd usage-radar
-.\scripts\start.ps1
 ```
 
-`start.ps1`은 사전 요건을 확인하고, 필요시 의존성을 설치한 후 앱을 실행합니다.
+그 다음 파일 탐색기에서 **`start.bat` 더블 클릭**. 끝.
+
+`start.bat`은 PowerShell ExecutionPolicy Bypass로 `scripts/start.ps1`을 실행하므로 정책 설정이 필요 없습니다. Rust와 bun을 확인하고, 필요시 `bun install`을 실행한 후 앱을 시작합니다.
+
 첫 Rust 컴파일은 약 1 GB 다운로드 + 5~10분 소요. 이후 실행은 몇 초.
 
 </details>

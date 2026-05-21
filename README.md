@@ -60,21 +60,25 @@ You need two tools (one-time install, global, used by all projects):
 - **bun** package manager
 
 <details>
-<summary><b>Windows (PowerShell)</b></summary>
+<summary><b>Windows</b></summary>
 
 ```powershell
-# 1. Install tools (once)
+# 1. Install tools (one-time, global)
 winget install --id Rustlang.Rustup
 winget install --id Oven-sh.Bun
 
-# 2. Clone and launch
+# 2. Clone
 git clone https://github.com/Tsai1030/usage-radar.git
 cd usage-radar
-.\scripts\start.ps1
 ```
 
-`start.ps1` checks prerequisites, installs deps if needed, then runs the app.
-First Rust compile downloads ~1 GB and takes 5–10 min; subsequent runs are seconds.
+Then **double-click `start.bat`** in File Explorer. That's it.
+
+`start.bat` wraps `scripts/start.ps1` with PowerShell ExecutionPolicy Bypass — no policy / signing setup required. It checks for Rust and bun, runs `bun install` if needed, then launches the app.
+
+First Rust compile downloads ~1 GB and takes 5–10 min. Subsequent runs are seconds.
+
+> Prefer the terminal? You can also run `.\start.bat` or `pwsh .\scripts\start.ps1` directly.
 
 </details>
 
@@ -97,13 +101,10 @@ bun run tauri dev
 
 ### Build your own installer
 
-```powershell
-.\scripts\build.ps1       # Windows
-# or
-bun run tauri build       # any platform
-```
+- **Windows**: double-click `scripts\build.bat`.
+- **Any platform**: `bun run tauri build`.
 
-Output appears in `src-tauri/target/release/bundle/`.
+Output appears in `src-tauri/target/release/bundle/` (e.g. `.msi` on Windows, `.dmg` on macOS, `.AppImage`/`.deb` on Linux).
 
 ## How to use it
 

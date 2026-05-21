@@ -58,20 +58,22 @@ Anthropic 和 OpenAI 都把订阅用量信息埋在浏览器某个页面里。**
 - **bun** 包管理器
 
 <details>
-<summary><b>Windows (PowerShell)</b></summary>
+<summary><b>Windows</b></summary>
 
 ```powershell
-# 1. 安装工具(一次性)
+# 1. 安装工具(一次性、全局)
 winget install --id Rustlang.Rustup
 winget install --id Oven-sh.Bun
 
-# 2. Clone 并启动
+# 2. Clone
 git clone https://github.com/Tsai1030/usage-radar.git
 cd usage-radar
-.\scripts\start.ps1
 ```
 
-`start.ps1` 会检查必要工具、安装依赖、然后启动 app。
+然后在文件资源管理器里**双击 `start.bat`**。就这样。
+
+`start.bat` 会用 PowerShell ExecutionPolicy Bypass 运行 `scripts/start.ps1`,不需要改任何权限设置。会检查 Rust 和 bun、需要时运行 `bun install`、然后启动 app。
+
 第一次 Rust 编译会下载约 1 GB、花 5–10 分钟,之后启动是秒级。
 
 </details>
