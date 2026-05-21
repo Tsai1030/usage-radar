@@ -34,7 +34,7 @@ impl ClaudeTier {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     #[serde(default)]
     pub claude_tier: ClaudeTier,
@@ -56,6 +56,31 @@ pub struct AppSettings {
     pub codex_session_pct_override: Option<u32>,
     #[serde(default)]
     pub codex_weekly_pct_override: Option<u32>,
+    /// Whether to surface a system notification when any bar crosses
+    /// NOTIFY_THRESHOLD_PCT from below. Default on.
+    #[serde(default = "default_notify_at_threshold")]
+    pub notify_at_threshold: bool,
+}
+
+fn default_notify_at_threshold() -> bool {
+    true
+}
+
+pub const NOTIFY_THRESHOLD_PCT: f32 = 85.0;
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            claude_tier: ClaudeTier::default(),
+            claude_session_cap_override: None,
+            claude_weekly_cap_override: None,
+            claude_session_calibration_pct: None,
+            claude_weekly_calibration_pct: None,
+            codex_session_pct_override: None,
+            codex_weekly_pct_override: None,
+            notify_at_threshold: true,
+        }
+    }
 }
 
 impl AppSettings {

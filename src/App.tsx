@@ -15,6 +15,7 @@ interface AppSettings {
   claude_weekly_calibration_pct?: number | null;
   codex_session_pct_override?: number | null;
   codex_weekly_pct_override?: number | null;
+  notify_at_threshold?: boolean;
 }
 
 
@@ -31,8 +32,8 @@ const TIERS: { id: Tier; label: string; session: string; weekly: string }[] = [
 
 const CARD_WIDTH = 260;
 const CARD_HEIGHT_NORMAL = 100;
-const CARD_HEIGHT_SETTINGS_CLAUDE = 290;
-const CARD_HEIGHT_SETTINGS_CODEX = 170;
+const CARD_HEIGHT_SETTINGS_CLAUDE = 320;
+const CARD_HEIGHT_SETTINGS_CODEX = 200;
 
 function barColor(pct: number, brandVar: string): string {
   if (pct >= 85) return "var(--bar-red)";
@@ -124,6 +125,19 @@ function Row({
   );
 }
 
+function NotifyToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="toggle-row" onClick={(e) => e.stopPropagation()}>
+      <input
+        type="checkbox"
+        checked={value}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="toggle-label">Notify at 85% threshold</span>
+    </label>
+  );
+}
+
 function ClaudeSettingsBody({
   tier,
   sessionPctInput,
@@ -132,9 +146,11 @@ function ClaudeSettingsBody({
   weeklyCount,
   liveSessionPct,
   liveWeeklyPct,
+  notifyAtThreshold,
   onChangeTier,
   onChangeSessionPct,
   onChangeWeeklyPct,
+  onToggleNotify,
 }: {
   tier: Tier;
   sessionPctInput: string;
@@ -143,9 +159,11 @@ function ClaudeSettingsBody({
   weeklyCount: number | null;
   liveSessionPct: number | null;
   liveWeeklyPct: number | null;
+  notifyAtThreshold: boolean;
   onChangeTier: (t: Tier) => void;
   onChangeSessionPct: (v: string) => void;
   onChangeWeeklyPct: (v: string) => void;
+  onToggleNotify: (v: boolean) => void;
 }) {
   return (
     <div className="settings-body">
@@ -209,6 +227,8 @@ function ClaudeSettingsBody({
       <div className="settings-foot muted">
         Type the % Anthropic shows. Re-type to recalibrate when drifted.
       </div>
+
+      <NotifyToggle value={notifyAtThreshold} onChange={onToggleNotify} />
     </div>
   );
 }
@@ -216,13 +236,17 @@ function ClaudeSettingsBody({
 function CodexSettingsBody({
   codexSessionPctInput,
   codexWeeklyPctInput,
+  notifyAtThreshold,
   onChangeCodexSessionPct,
   onChangeCodexWeeklyPct,
+  onToggleNotify,
 }: {
   codexSessionPctInput: string;
   codexWeeklyPctInput: string;
+  notifyAtThreshold: boolean;
   onChangeCodexSessionPct: (v: string) => void;
   onChangeCodexWeeklyPct: (v: string) => void;
+  onToggleNotify: (v: boolean) => void;
 }) {
   return (
     <div className="settings-body">
@@ -255,6 +279,8 @@ function CodexSettingsBody({
       <div className="settings-foot muted">
         Use ChatGPT/OpenAI dashboard's %. Empty = live CLI value.
       </div>
+
+      <NotifyToggle value={notifyAtThreshold} onChange={onToggleNotify} />
     </div>
   );
 }
@@ -270,6 +296,7 @@ export default function App() {
   const [weeklyPctInput, setWeeklyPctInput] = useState<string>("");
   const [codexSessionPctInput, setCodexSessionPctInput] = useState<string>("");
   const [codexWeeklyPctInput, setCodexWeeklyPctInput] = useState<string>("");
+  const [notifyAtThreshold, setNotifyAtThreshold] = useState<boolean>(true);
   const [savedFlash, setSavedFlash] = useState(false);
 
   useEffect(() => {
@@ -326,6 +353,7 @@ export default function App() {
         setCodexWeeklyPctInput(
           s.codex_weekly_pct_override != null ? String(s.codex_weekly_pct_override) : "",
         );
+        setNotifyAtThreshold(s.notify_at_threshold ?? true);
       })
       .catch(() => undefined);
 
@@ -390,8 +418,14 @@ export default function App() {
     claude_weekly_calibration_pct: weeklyPctInput ? parseInt(weeklyPctInput, 10) || null : null,
     codex_session_pct_override: codexSessionPctInput ? parseInt(codexSessionPctInput, 10) || null : null,
     codex_weekly_pct_override: codexWeeklyPctInput ? parseInt(codexWeeklyPctInput, 10) || null : null,
+    notify_at_threshold: notifyAtThreshold,
     ...overrides,
   });
+
+  const onToggleNotify = (next: boolean) => {
+    setNotifyAtThreshold(next);
+    persistSettings(buildSettings({ notify_at_threshold: next }));
+  };
 
   const updateTier = (t: Tier) => {
     setTier(t);
@@ -556,16 +590,20 @@ export default function App() {
             weeklyCount={weeklyCount}
             liveSessionPct={liveSessionPct}
             liveWeeklyPct={liveWeeklyPct}
+            notifyAtThreshold={notifyAtThreshold}
             onChangeTier={updateTier}
             onChangeSessionPct={onChangeSessionPct}
             onChangeWeeklyPct={onChangeWeeklyPct}
+            onToggleNotify={onToggleNotify}
           />
         ) : (
           <CodexSettingsBody
             codexSessionPctInput={codexSessionPctInput}
             codexWeeklyPctInput={codexWeeklyPctInput}
+            notifyAtThreshold={notifyAtThreshold}
             onChangeCodexSessionPct={onChangeCodexSessionPct}
             onChangeCodexWeeklyPct={onChangeCodexWeeklyPct}
+            onToggleNotify={onToggleNotify}
           />
         )
       ) : (
